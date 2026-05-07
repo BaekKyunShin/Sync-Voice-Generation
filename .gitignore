@@ -1,0 +1,68 @@
+# ── 비밀·인증 ─────────────────────────────────
+.env
+.env.local
+*.env.local
+.env.*.local
+*.pem
+*credential*
+*secret*
+
+# ── 큰 데이터·라이선스 보호 ──────────────────
+# KsponSpeech 음성/텍스트는 학내 연구용. 외부 공개 금지.
+data/
+data_kspon/
+data_synth/
+archive/
+metadata/
+checkpoints/
+
+# 외부 다운 데이터셋 (재현 가능 — 다운 스크립트로 복구)
+assets/musan/
+assets/rir/
+
+# 합성·증강 결과는 코드 재실행으로 재생성 가능
+*.wav
+
+# ── Python ────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# 가상환경
+.venv/
+venv/
+env/
+
+# ── Jupyter ──────────────────────────────────
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# ── OS ───────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── IDE ──────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ── Claude Code ──────────────────────────────
+.claude/
+plans/
+
+# ── 임시·로그 ─────────────────────────────────
+*.log
+*.tmp
+tmp/
+_tmp_*/
