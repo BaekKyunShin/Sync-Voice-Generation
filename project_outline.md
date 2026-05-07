@@ -87,6 +87,21 @@
 
 → **3개 회사 = 3개의 다른 합성 backend = 3가지 다른 artifact**.
 
+#### CLOVA 화자 (8명, sanity 청취 후 § 5 가이드 통과만 선정)
+
+| Speaker ID | Korean | 라인 | 화자당 분량 |
+|---|---|---|---|
+| `vdonghyun` | 동현 | Pro | ~53분 |
+| `vyuna` | 유나 | Pro | ~53분 |
+| `vhyeri` | 혜리 | Pro | ~53분 |
+| `njangj` | 드림 | NES | ~53분 |
+| `nreview` | 박리뷰 | NES | ~53분 |
+| `nsangdo` | 상도 | NES | ~53분 |
+| `nseungpyo` | 승표 | NES | ~53분 |
+| `njihwan` | 지환 | NES | ~53분 |
+
+> 9명 후보(+ `nsunhee`)에서 사용자 청취 결과 nsunhee 제외 → 최종 8명. CLOVA 7h ÷ 8명 = 화자당 ≈ 53분. 한 화자 패턴 외울 위험 ↓ (RawBoost·anti-spoofing 권장 화자 다양성).
+
 ### 4.4 진짜·가짜 텍스트 분리
 - 진짜로 쓴 9,690 발화의 텍스트는 합성에 절대 사용 X (텍스트 누설 방지)
 - 합성용 풀과 진짜용 풀의 화자/문장 교집합 자동 검사
@@ -309,6 +324,7 @@
 
 | 일자 | 변경 |
 |---|---|
+| 2026-05-07 | **CLOVA 화자 8명 확정** (§ 4.3) — 9명 후보 sanity 청취 후 nsunhee 제외. Pro 3 + NES 5 = 화자당 ≈ 53분 분배. P1 disfluent 텍스트(filler·lengthening·repetition·mid-pause) + RawBoost-style v3 후처리(linear conv·soft clip·impulse·real noise·codec) 청취 검증 통과. |
 | 2026-05-06 (저녁) | **데이터 규모 상향**: 진짜 10h+가짜 10h → **진짜 15h+가짜 15h** (총 30h). KsponSpeech_02 일부 추가 다운 필요. TTS 분량 7h/5h/3h로 재배분. split 비율 70/15/15 유지(목표 화자 14/4/4). 비용 ~2.7만원, 합계 GPU ~16~24h. |
 | 2026-05-06 (오후) | **방향 재정리**: 가짜 분량 20h → 10h (진짜 10h와 1:1). **§ 5 화자 선택 가이드 신설**(아나운서/스튜디오 톤 회피). **§ 6 양방향 증강 신설**(학술 기여 핵심). **§ 8 모델을 GRU → LCNN → SOTA 점진 ablation 구조로 재구성**(SOTA 구체 모델은 추후 확정). RQ3에 양방향 증강 ablation, RQ4에 cross-domain leave-one-out 추가. 입력을 raw waveform으로 명시. |
 | 2026-05-06 | KsponSpeech_01 다운·압축 해제(zip 일부 손상이지만 화자 17명 정상 추출). Speaker-disjoint split 11/3/3 화자 = 9,690 발화 14.87h. 합성용 텍스트 풀 13,310 발화. **§ 7.4 텍스트 정제 정책 신설** — 망설임 보존·이중표기 발음형·비언어 마커 제거. |

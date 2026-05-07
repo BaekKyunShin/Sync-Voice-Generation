@@ -35,13 +35,13 @@ HEADERS = {
 }
 
 SPEAKERS = [
+    # 8명 — sanity 청취 후 nsunhee 제외 (§ project_outline.md § 4.3)
     ("동현 Pro",  "vdonghyun"),
     ("유나 Pro",  "vyuna"),
     ("혜리 Pro",  "vhyeri"),
     ("드림",      "njangj"),
     ("박리뷰",    "nreview"),
     ("상도",      "nsangdo"),
-    ("선희",      "nsunhee"),
     ("승표",      "nseungpyo"),
     ("지환",      "njihwan"),
 ]

@@ -307,10 +307,11 @@ V3_PRESETS = {
         "p_codec": 0.3, "codec_kind": "mp3_128",
     },
     "medium": {
-        "snr": (18, 25), "wet": (0.08, 0.15), "vol_db": (-3.0, 3.0),
-        "p_eq": 0.6, "p_clip": 0.2, "p_impulse": 0.1,
-        "p_noise": 0.8, "p_reverb": 0.5,
-        "p_codec": 0.5, "codec_kind": "mp3_96",
+        # light와 청취 격차 ↑ — SNR 더 낮춤·noise/reverb/codec 모두 100%·코덱 mp3_64로 강화
+        "snr": (13, 18), "wet": (0.12, 0.20), "vol_db": (-3.5, 3.5),
+        "p_eq": 0.8, "p_clip": 0.3, "p_impulse": 0.2,
+        "p_noise": 1.0, "p_reverb": 0.85,
+        "p_codec": 0.9, "codec_kind": "mp3_64",
     },
     "heavy": {
         "snr": (12, 18), "wet": (0.15, 0.22), "vol_db": (-4.0, 4.0),
