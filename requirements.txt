@@ -1,0 +1,19 @@
+# 데이터 처리·합성·증강 파이프라인 의존성
+# 학습 단계 의존성(torch 등)은 별도 — Colab 환경 기준
+
+# 핵심
+numpy>=2.0
+scipy>=1.14
+librosa>=0.10
+soundfile>=0.12
+audiomentations>=0.40
+pydub>=0.25
+pyroomacoustics>=0.7
+
+# CLOVA Voice TTS API 호출
+requests>=2.31
+python-dotenv>=1.0
+
+# (선택) 분석·시각화
+pandas>=2.2
+matplotlib>=3.9
