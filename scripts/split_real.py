@@ -17,9 +17,19 @@ import random
 from collections import defaultdict
 from pathlib import Path
 
-TRAIN_SPEAKERS = [f"KsponSpeech_{i:04d}" for i in range(1, 12)]   # 0001~0011
-VAL_SPEAKERS   = [f"KsponSpeech_{i:04d}" for i in range(12, 15)]  # 0012~0014
-TEST_SPEAKERS  = [f"KsponSpeech_{i:04d}" for i in range(15, 18)]  # 0015~0017
+# 22 화자: _01 17명(0001~0017) + _02 5명(0125~0129) → train 14 / val 4 / test 4
+TRAIN_SPEAKERS = (
+    [f"KsponSpeech_{i:04d}" for i in range(1, 12)]    # 0001~0011 (_01 11명)
+    + [f"KsponSpeech_{i:04d}" for i in range(125, 128)]  # 0125~0127 (_02 3명)
+)  # 14명
+VAL_SPEAKERS = (
+    [f"KsponSpeech_{i:04d}" for i in range(12, 15)]   # 0012~0014 (_01 3명)
+    + ["KsponSpeech_0128"]                            # _02 1명
+)  # 4명
+TEST_SPEAKERS = (
+    [f"KsponSpeech_{i:04d}" for i in range(15, 18)]   # 0015~0017 (_01 3명)
+    + ["KsponSpeech_0129"]                            # _02 1명
+)  # 4명
 
 
 def main() -> int:

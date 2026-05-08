@@ -307,11 +307,12 @@ V3_PRESETS = {
         "p_codec": 0.3, "codec_kind": "mp3_128",
     },
     "medium": {
-        # light와 청취 격차 ↑ — SNR 더 낮춤·noise/reverb/codec 모두 100%·코덱 mp3_64로 강화
-        "snr": (13, 18), "wet": (0.12, 0.20), "vol_db": (-3.5, 3.5),
-        "p_eq": 0.8, "p_clip": 0.3, "p_impulse": 0.2,
-        "p_noise": 1.0, "p_reverb": 0.85,
-        "p_codec": 0.9, "codec_kind": "mp3_64",
+        # light와 medium 사이 강도 — 청취 결과 medium 노이즈 너무 셈 → 약화
+        # SNR/wet/codec 강도·확률 모두 light~기존medium 중간으로 조정
+        "snr": (18, 25), "wet": (0.08, 0.13), "vol_db": (-2.5, 2.5),
+        "p_eq": 0.6, "p_clip": 0.15, "p_impulse": 0.1,
+        "p_noise": 0.85, "p_reverb": 0.6,
+        "p_codec": 0.6, "codec_kind": "mp3_96",
     },
     "heavy": {
         "snr": (12, 18), "wet": (0.15, 0.22), "vol_db": (-4.0, 4.0),
@@ -385,6 +386,77 @@ def apply_chain_v3(
     applied.append("vol_smooth")
 
     return np.clip(out, -1.0, 1.0).astype(np.float32), applied
+
+
+# ─── B안: silence trim + 합성 호흡음 prepend ─────────────────────
+# 단음절 filler "어/아" 합성이 어색한 문제 우회 — 시작을 호흡음으로 자연화.
+
+
+def synthetic_breath(
+    sr: int, dur_sec: float, kind: str, rng: np.random.Generator
+) -> np.ndarray:
+    """들숨/날숨 합성 — pink noise + low-pass(~2kHz) + amplitude envelope.
+
+    kind: "inhale" (짧게 상승 → 천천히 감쇠) 또는 "exhale" (천천히 상승 → 짧게 감쇠).
+    """
+    n = max(int(dur_sec * sr), 1)
+    pink = _pink_noise(n, rng)
+    # 사람 호흡 spectral peak는 200~2000Hz
+    sos = signal.butter(4, [200, 2200], btype="bandpass", fs=sr, output="sos")
+    pink = signal.sosfilt(sos, pink).astype(np.float32)
+
+    if kind == "inhale":
+        rise = max(int(n * 0.2), 1)
+        decay = n - rise
+        env = np.concatenate([
+            np.linspace(0, 1, rise),
+            np.linspace(1, 0, max(decay, 1)) ** 1.5,
+        ])
+    else:  # exhale
+        rise = max(int(n * 0.6), 1)
+        decay = n - rise
+        env = np.concatenate([
+            np.linspace(0, 1, rise) ** 1.2,
+            np.linspace(1, 0, max(decay, 1)),
+        ])
+    env = env[:n]
+    breath = (pink * env).astype(np.float32)
+    # 호흡음 RMS를 매우 약하게 (합성음 본문보다 훨씬 작게)
+    breath_rms = _rms(breath)
+    if breath_rms > 0:
+        breath = breath / breath_rms * 0.04
+    return breath.astype(np.float32)
+
+
+def trim_leading_silence(y: np.ndarray, sr: int, top_db: float = 35.0) -> np.ndarray:
+    """발화 시작 silence·매우 약한 부분 제거."""
+    intervals = librosa.effects.split(y, top_db=top_db)
+    if len(intervals) == 0:
+        return y
+    return y[intervals[0][0]:]
+
+
+def prepend_breath_natural(
+    y: np.ndarray, sr: int, rng: np.random.Generator,
+    apply_prob: float = 0.75,
+) -> tuple[np.ndarray, str]:
+    """합성 wav 앞부분 silence trim + 호흡음 + 짧은 silence prepend.
+
+    합성티(시작 부분이 너무 깔끔함)를 자연화. 75% wav에만 적용.
+    Returns: (output, applied_desc)
+    """
+    if rng.random() >= apply_prob:
+        return y, "no_breath"
+
+    y = trim_leading_silence(y, sr, top_db=35.0)
+
+    breath_dur = float(rng.uniform(0.25, 0.45))
+    silence_dur = float(rng.uniform(0.05, 0.15))
+    kind = "inhale" if rng.random() < 0.65 else "exhale"
+    breath = synthetic_breath(sr, breath_dur, kind, rng)
+    silence = np.zeros(int(silence_dur * sr), dtype=np.float32)
+    out = np.concatenate([breath, silence, y]).astype(np.float32)
+    return out, f"breath_{kind}({breath_dur:.2f}s)+sil({silence_dur:.2f}s)"
 
 
 def load_real_noise_pool(noise_dir: Path, sr: int = 16000,
