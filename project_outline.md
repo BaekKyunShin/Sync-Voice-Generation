@@ -145,12 +145,55 @@
 
 | 대상 | 적용 |
 |---|---|
-| **합성음 only** | 노이즈 추가(MUSAN 등), **전화망 코덱 시뮬레이션**(8kHz μ-law round-trip), 볼륨 들쭉날쭉화 |
-| **진짜 only** | 약한 denoising, 음량 정규화 |
-| **양쪽 동일** | SpecAugment, 시간 마스킹, 약한 reverb — anti-spoofing 표준 증강 |
+| **합성음 only** | § 6.3 RawBoost-style v3 chain (texual·후처리 둘 다) |
+| **진짜 only** | (학습 단계) 약한 denoising, 음량 정규화 — TBD |
+| **양쪽 동일** | (학습 단계) SpecAugment, 시간 마스킹, 약한 reverb — TBD |
 
-### 6.3 학술 메시지
-> "한국어 합성음 탐지의 핵심 도전 과제는 **도메인 갭**이며, 우리는 **양방향 증강 + 전화망 코덱 시뮬레이션**으로 이를 해결했다."
+### 6.3 합성음 후처리 v3 (실제 적용)
+
+학술 근거: [Tak et al. 2022 RawBoost (arxiv 2111.04433)](https://arxiv.org/abs/2111.04433) — anti-spoofing 표준 4 카테고리.
+
+**Mix 비율** (light dominant, heavy 제외 — 사용자 청취 검증):
+
+| 강도 | 비율 | 청취감 |
+|---|---|---|
+| **light** | 70% | 조용한 실내 (SNR 25~35dB, wet 0.03~0.08) |
+| **medium** | 25% | 일반 통화·녹음 (SNR 18~25dB, wet 0.08~0.13) |
+| **original** | 5% | 후처리 X (dry, 합성티만) |
+
+**시작 자연화** (75% 발화에 적용):
+- silence trim (top_db=35) → 합성 호흡음(들숨 65% / 날숨 35%) prepend
+- 호흡음: pink noise + bandpass 200~2200Hz + amplitude envelope (0.25~0.45s)
+- 짧은 silence(0.05~0.15s) buffer 후 본문 시작 → "사람 말 시작" 인상
+
+**RawBoost 4 카테고리** (발화 단위 random):
+
+| 카테고리 | 적용 |
+|---|---|
+| Linear convolutive (마이크·채널 EQ) | random shelf / 전화 bandpass 300~3400Hz / 일반 60~7800Hz |
+| Non-linear convolutive (앰프 saturation) | tanh soft clipping (threshold 0.85~0.97) |
+| Impulsive additive (클릭/팝) | sparse 3~12 impulses (amp 0.05~0.20) |
+| Stationary additive (환경 노이즈) | **MUSAN noise 930개 풀**에서 SNR-mix |
+
+**Codec cascade**:
+- light: mp3 128kbps round-trip 30%
+- medium: mp3 96kbps round-trip 60%
+- (μ-law 8k 전화망 코덱은 heavy 강도용 — 이번 mix에선 미사용)
+
+**Reverb (room reflection)**:
+- 합성 IR 풀 16개 (`pyroomacoustics`, small/medium/large rooms 분포, RT60 다양화)
+- light wet 0.03~0.08, medium wet 0.08~0.13
+
+**Volume**:
+- smooth random walk envelope (n=6 anchor, 선형 보간) — step jitter 대신 부드러운 마이크 거리 변화
+
+### 6.4 시작 자연화의 학술 근거
+
+[Klatt 1987](https://asa.scitation.org/doi/10.1121/1.395275) — 단음절 filler ("어", "아") TTS는 자연성 가장 약한 지점. CLOVA Premium은 SSML 미지원이라 prosody 부분 제어 불가 → **텍스트 단계에서 filler 제거 + 후처리 단계에서 호흡음 prepend**로 우회.
+
+### 6.5 학술 메시지
+
+> "한국어 합성음 탐지의 핵심 도전 과제는 **도메인 갭**이다. 우리는 **RawBoost-style 4 카테고리 + 합성 호흡음 prepend + light dominant mix**로 해결했다."
 
 → 발표·보고서의 메인 슬라이드.
 
@@ -324,6 +367,7 @@
 
 | 일자 | 변경 |
 |---|---|
+| 2026-05-08 | **본 합성·진짜 보강 완료**: CLOVA 8 화자 × 53분 = **5,064 발화 / 7.07h** (TTS 파라미터 발화별 random ±3, alpha/end-pitch 추가). KsponSpeech_02 화자 5명(0125~0129) 추가 → 진짜 22명 / **14.62h** (split 14/4/4). § 7.2 누설 499 utt 제거 후 0. 평균 발화 길이 진짜 4.83s ≈ 합성 5.03s. |
 | 2026-05-07 | **CLOVA 화자 8명 확정** (§ 4.3) — 9명 후보 sanity 청취 후 nsunhee 제외. Pro 3 + NES 5 = 화자당 ≈ 53분 분배. P1 disfluent 텍스트(filler·lengthening·repetition·mid-pause) + RawBoost-style v3 후처리(linear conv·soft clip·impulse·real noise·codec) 청취 검증 통과. |
 | 2026-05-06 (저녁) | **데이터 규모 상향**: 진짜 10h+가짜 10h → **진짜 15h+가짜 15h** (총 30h). KsponSpeech_02 일부 추가 다운 필요. TTS 분량 7h/5h/3h로 재배분. split 비율 70/15/15 유지(목표 화자 14/4/4). 비용 ~2.7만원, 합계 GPU ~16~24h. |
 | 2026-05-06 (오후) | **방향 재정리**: 가짜 분량 20h → 10h (진짜 10h와 1:1). **§ 5 화자 선택 가이드 신설**(아나운서/스튜디오 톤 회피). **§ 6 양방향 증강 신설**(학술 기여 핵심). **§ 8 모델을 GRU → LCNN → SOTA 점진 ablation 구조로 재구성**(SOTA 구체 모델은 추후 확정). RQ3에 양방향 증강 ablation, RQ4에 cross-domain leave-one-out 추가. 입력을 raw waveform으로 명시. |

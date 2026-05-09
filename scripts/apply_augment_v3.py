@@ -36,6 +36,7 @@ from lib.augment_ops import (  # noqa: E402
     apply_chain_v3,
     load_real_noise_pool,
     load_rir_pool,
+    prepend_breath_natural,
 )
 
 INPUT_MANIFEST = Path("metadata/splits/synth_main_v3_manifest.csv")
@@ -77,13 +78,17 @@ def main() -> None:
         spk = row["speaker"]
         var = row["variant"]
         wav_path = Path(row["wav_path"])
-        y, _ = librosa.load(wav_path, sr=SR)
+        y_raw, _ = librosa.load(wav_path, sr=SR)
+
+        # B안: 시작 silence trim + 호흡음 prepend (한 발화당 1번, 강도들 공유)
+        y, breath_desc = prepend_breath_natural(y_raw, SR, rng, apply_prob=0.75)
 
         for n_idx, strength in STRENGTH_ORDER:
             y_out, applied = apply_chain_v3(
                 y, SR, strength,
                 real_noise_pool=real_noise_pool, rir_pool=rir_pool, rng=rng,
             )
+            applied = [breath_desc, *applied]
 
             # 1) augmentation 폴더에 저장
             aug_path = OUT_AUG / f"{spk}__{var}__{strength}.wav"

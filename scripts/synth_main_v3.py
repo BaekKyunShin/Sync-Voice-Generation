@@ -46,12 +46,14 @@ SPEAKERS = [
     ("지환",      "njihwan"),
 ]
 
-# P1 disfluent 변형 (학술 검증 disfluency: filler·lengthening·repetition·mid-pause)
+# P1 disfluent 변형 — A안: 문두 filler 제거, 본문 안 자연스러운 망설임만 유지
+# ※ "어,"·"아..." 같은 단음절 filler 시작은 TTS에서 어색 (Klatt 1987) → 제거.
+# ※ "그", "그게..." 같은 본문 안 망설임은 자연스러움 유지.
 VARIANTS = [
     ("varA",
-     "어, 어제 말씀하신 거 있잖아요오. 그게 좀, 그게 급한 거 같아서... 혹시 통화 가능하세요?"),
+     "어제 말씀하신 거, 그 있잖아요. 그게 좀, 그게 급한 거 같아서... 혹시 통화 가능하세요?"),
     ("varB",
-     "아... 진짜 너무 힘드네요오. 어떻게 해야 좋을지... 모르겠어요."),
+     "진짜 너무 힘드네요. 어떻게 해야 좋을지, 그게... 모르겠어요."),
 ]
 
 OUT_DIR = Path("data_kspon/synth_main_v3")
