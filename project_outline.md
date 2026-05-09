@@ -106,6 +106,78 @@
 - 진짜로 쓴 9,690 발화의 텍스트는 합성에 절대 사용 X (텍스트 누설 방지)
 - 합성용 풀과 진짜용 풀의 화자/문장 교집합 자동 검사
 
+### 4.5 Google·ElevenLabs 진행 절차 (CLOVA 패턴 응용)
+
+CLOVA로 검증된 정책을 그대로 적용. 새 세션에서도 이 섹션만 읽으면 진행 가능.
+
+#### 청취 검증으로 정해진 결정 (CLOVA에서 확정)
+
+| 항목 | 결정 | 이유 |
+|---|---|---|
+| **단음절 filler 시작** | 텍스트 풀 그대로 (`text_clean` 사용), 추가 삽입 X | "어,"·"아..." 첫 어절이 TTS에서 부자연 (Klatt 1987) |
+| **모음 늘림 (lengthening)** | 표기 변형 X | "요오" 같은 표기 어색 |
+| **후처리 mix** | light 70 / medium 25 / original 5% | heavy 제외 — 자연스러움 우선 |
+| **medium 강도** | SNR 18~25dB, wet 0.08~0.13, codec mp3_96 | 초기 SNR 13~18은 노이즈 너무 셈 |
+| **시작 자연화** | silence trim + 합성 호흡음 prepend (75%) | 단음절 시작 어색함 우회 |
+| **TTS 파라미터** | 발화 단위 random ±3 (speed/pitch/volume/alpha) + end-pitch ±2 | 화자별 단조로움 ↓ |
+
+#### 텍스트 풀 — utt_id 누설 자동 방지
+
+| 풀 | 발화 수 | 사용 정책 |
+|---|---|---|
+| `metadata/splits/synth_text_pool_clean.csv` | 13,180 | **공통 풀** |
+| CLOVA 기사용 (`synth_full_manifest.csv`) | 5,064 | Google·ElevenLabs 추출 시 **제외** |
+| Google·ElevenLabs 간 | — | **다른 화자 sub-seed**로 random sample, utt_id 중복 X |
+
+→ 새 합성 스크립트에서 `synth_full_manifest.csv` + `synth_full_google_manifest.csv` 등의 utt_id를 `used_utts` 집합에 미리 로드 → 무조건 제외.
+
+#### Google Cloud TTS
+
+| 항목 | 값 |
+|---|---|
+| 인증 | `GOOGLE_APPLICATION_CREDENTIALS` (service account JSON 경로) → `.env` |
+| SDK | `pip install google-cloud-texttospeech` |
+| 모델 | **Neural2** (`ko-KR-Neural2-A/B/C/...`), Studio voice도 가능 |
+| 화자 후보 | 한국어 Neural2 4~6명 |
+| 분량 | 5h ÷ 화자 = ~50~75분/화자 |
+| 출력 | LINEAR16 24kHz 또는 16kHz 직접 요청 → 16kHz/PCM_16/mono 통일 |
+
+#### ElevenLabs
+
+| 항목 | 값 |
+|---|---|
+| 인증 | `ELEVENLABS_API_KEY` → `.env` |
+| SDK | `pip install elevenlabs` |
+| 모델 | `eleven_multilingual_v2` (한국어 지원) |
+| 화자 후보 | Multilingual 한국어 voice 3~5명 |
+| 분량 | 3h ÷ 화자 = ~40~60분/화자 |
+| 비용 | Creator plan 1개월 ~3만원, 100k chars/월 |
+| 출력 | 24kHz mp3 → librosa 16kHz wav 변환 |
+
+#### 코드 재사용 패턴
+
+| 새로 작성 | 재사용 (입력만 교체) |
+|---|---|
+| `scripts/synth_full_google.py` | `apply_augment_full_mix.py` (후처리 mix 그대로) |
+| `scripts/synth_full_elevenlabs.py` | `build_manifest_full.py` (통합 manifest 갱신) |
+
+> 합성 스크립트는 [`scripts/synth_full.py`](scripts/synth_full.py) 패턴 그대로:
+> - 텍스트 풀 random sample (used_utts 제외)
+> - 분량 도달 stop, resume 지원, 연속 실패 안전장치
+> - manifest CSV 즉시 저장 (실패 대비)
+
+#### 진행 흐름
+
+1. **화자 sanity check** — 데모 사이트(Google Cloud Console TTS demo / ElevenLabs voice library) 또는 SDK로 1발화씩 → § 5 가이드 적용
+2. **본 합성** — 분량 측정 stop
+3. **후처리 mix** — `apply_augment_full_mix.py` 입력 manifest 변경해서 실행
+4. **통합 manifest** — `build_manifest_full.py` 확장 (Google·ElevenLabs source 추가)
+5. **검수** — 16kHz·PCM_16·mono / utt_id·speaker 누설 0 / 길이 분포 진짜와 매칭 / 화자별 강도 분포 균등
+
+#### Spoof split (모든 TTS 합산 후 결정)
+
+CLOVA 8 + Google ~5 + ElevenLabs ~4 ≈ 17 화자 → speaker-disjoint train/val/test 재분배 (예: 13/2/2). [`build_manifest_full.py`의 `SPOOF_SPLIT` dict](scripts/build_manifest_full.py) 갱신.
+
 ---
 
 ## 5. 화자 선택 가이드 (필수 — 가장 흔한 함정)
