@@ -61,6 +61,19 @@ DEFAULT_SEED = 42
 MIX_WEIGHTS = [("light", 0.70), ("medium", 0.25), ("original", 0.05)]
 BREATH_APPLY_PROB = 0.75
 
+# spoof split (build_manifest_full.py와 동기화 필수)
+# 출력 경로 패턴: <out-dir>/<split>/<speaker>/<utt_id>.wav
+SPOOF_SPLIT = {
+    "vdonghyun": "train", "vyuna": "train", "vhyeri": "train",
+    "njangj": "train", "nreview": "train", "nsangdo": "train",
+    "nseungpyo": "val", "njihwan": "test",
+    "ko-KR-Chirp3-HD-Aoede": "train",
+    "ko-KR-Chirp3-HD-Charon": "train",
+    "ko-KR-Chirp3-HD-Kore": "train",
+    "ko-KR-Neural2-C": "val",
+    "ko-KR-Wavenet-C": "test",
+}
+
 OUT_FIELDS = ["utt_id", "speaker", "strength", "applied_ops",
               "wav_path", "duration_sec"]
 
@@ -106,7 +119,9 @@ def main() -> None:
         spk = row["speaker"]
         utt_id = row["utt_id"]
         wav_in = Path(row["wav_path"])
-        spk_dir = args.out_dir / spk
+        if spk not in SPOOF_SPLIT:
+            raise SystemExit(f"unknown speaker {spk!r} — SPOOF_SPLIT 갱신 필요")
+        spk_dir = args.out_dir / SPOOF_SPLIT[spk] / spk
         spk_dir.mkdir(parents=True, exist_ok=True)
         wav_out = spk_dir / f"{utt_id}.wav"
 
