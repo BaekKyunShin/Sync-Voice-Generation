@@ -31,6 +31,7 @@ import random
 import sys
 from pathlib import Path
 
+import numpy as np
 import requests
 import soundfile as sf
 from dotenv import load_dotenv
@@ -72,13 +73,13 @@ MANIFEST_FIELDS = [
 
 
 def sample_params(seed_str: str) -> dict:
-    """utt_id+speaker 기반 결정론."""
+    """utt_id+speaker 기반 결정론. ±1로 축소 (화자 톤 안정성 ↑)."""
     rng = random.Random(seed_str)
-    speed = rng.randint(-3, 3)
-    pitch = rng.randint(-3, 3)
-    volume = rng.randint(-3, 3)
-    alpha = rng.randint(-3, 3)
-    end_pitch = rng.randint(-2, 2)
+    speed = rng.randint(-1, 1)
+    pitch = rng.randint(-1, 1)
+    volume = rng.randint(-1, 1)
+    alpha = rng.randint(-1, 1)
+    end_pitch = rng.randint(-1, 1)
     if rng.random() < 0.2:
         emotion, emotion_strength = 2, 1
     else:
@@ -88,6 +89,22 @@ def sample_params(seed_str: str) -> dict:
         "alpha": alpha, "end_pitch": end_pitch,
         "emotion": emotion, "emotion_strength": emotion_strength,
     }
+
+
+# 합성 직후 첫 30ms 선형 fade-in — CLOVA wav 헤더 click/pop 원천 제거
+FADE_IN_MS = 30
+
+
+def apply_fade_in(out_path: Path, fade_ms: int = FADE_IN_MS) -> None:
+    y, file_sr = sf.read(out_path)
+    n = int(file_sr * fade_ms / 1000)
+    if n > 0 and len(y) > n:
+        ramp = np.linspace(0.0, 1.0, n, dtype=y.dtype if y.dtype.kind == "f" else "float32")
+        if y.ndim == 1:
+            y[:n] = (y[:n].astype("float32") * ramp).astype(y.dtype)
+        else:
+            y[:n, :] = (y[:n, :].astype("float32") * ramp[:, None]).astype(y.dtype)
+        sf.write(out_path, y, file_sr, subtype="PCM_16")
 
 
 def synth_one(speaker: str, text: str, params: dict, out_path: Path) -> tuple[bool, str]:
@@ -112,6 +129,7 @@ def synth_one(speaker: str, text: str, params: dict, out_path: Path) -> tuple[bo
     if res.status_code != 200:
         return False, f"{res.status_code} {res.text[:120]}"
     out_path.write_bytes(res.content)
+    apply_fade_in(out_path)
     return True, ""
 
 

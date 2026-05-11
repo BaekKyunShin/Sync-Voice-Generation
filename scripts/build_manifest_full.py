@@ -1,15 +1,18 @@
 """통합 학습 매니페스트 빌드 (Track D).
 
-real (KsponSpeech 22 화자, 14.62h) + spoof (CLOVA 8 화자, ~7h) 통합:
+real (KsponSpeech 22 화자) + spoof (CLOVA 8 + Google 5 = 13 화자) 통합:
   컬럼: utt_id, speaker, label, source, text, wav_path, duration_sec, split
 
 real split: real_{train,val,test}_clean.csv 그대로
-spoof split (8 화자 → 6/1/1, 최대 다양성 + speaker-disjoint):
-  train: vdonghyun, vyuna, vhyeri, njangj, nreview, nsangdo (6명)
-  val:   nseungpyo (1명)
-  test:  njihwan (1명)
+spoof split (13 화자 → 9/2/2, val·test에 CLOVA·Google 각 1명씩):
+  train: vdonghyun, vyuna, vhyeri, njangj, nreview, nsangdo (CLOVA 6명)
+         Chirp3-HD-Aoede, Chirp3-HD-Charon, Chirp3-HD-Kore (Google 3명)
+  val:   nseungpyo (CLOVA), Neural2-C (Google)
+  test:  njihwan (CLOVA), Wavenet-C (Google)
 
 § 7.2 (utt_id 누설), § 7.3 (speaker 누설) 자동 검증.
+spoof 내부 utt_id 충돌(같은 utt_id가 CLOVA·Google 양쪽) 검출 시 Google 측 drop
+(CLOVA가 먼저 합성됨 → 중복 발생 시 Google이 제거 대상).
 
 실행:
     python scripts/build_manifest_full.py
@@ -24,19 +27,87 @@ import sys
 from pathlib import Path
 
 REAL_SPLITS_DIR = Path("metadata/splits")
-SPOOF_AUG_MANIFEST = Path("metadata/splits/synth_full_aug_manifest.csv")
-SPOOF_RAW_MANIFEST = Path("metadata/splits/synth_full_manifest.csv")
+
+# CLOVA 8 화자
+CLOVA_RAW_MANIFEST = Path("metadata/splits/synth_full_manifest.csv")
+CLOVA_AUG_MANIFEST = Path("metadata/splits/synth_full_aug_manifest.csv")
+# Google 5 화자
+GOOGLE_RAW_MANIFEST = Path("metadata/splits/synth_full_google_manifest.csv")
+GOOGLE_AUG_MANIFEST = Path("metadata/splits/synth_full_google_aug_manifest.csv")
+
 OUT = Path("metadata/splits/manifest_full.csv")
 
 SPOOF_SPLIT = {
+    # CLOVA train (6)
     "vdonghyun": "train", "vyuna": "train", "vhyeri": "train",
     "njangj": "train", "nreview": "train", "nsangdo": "train",
+    # CLOVA val/test
     "nseungpyo": "val",
     "njihwan": "test",
+    # Google train (3 Chirp3-HD)
+    "ko-KR-Chirp3-HD-Aoede": "train",
+    "ko-KR-Chirp3-HD-Charon": "train",
+    "ko-KR-Chirp3-HD-Kore": "train",
+    # Google val/test
+    "ko-KR-Neural2-C": "val",
+    "ko-KR-Wavenet-C": "test",
 }
 
 FIELDS = ["utt_id", "speaker", "label", "source",
            "text", "wav_path", "duration_sec", "split"]
+
+
+def _source_from_speaker(spk: str) -> str:
+    return "Google" if spk.startswith("ko-KR-") else "CLOVA"
+
+
+def _load_text_lookup(*manifests: Path) -> dict[str, str]:
+    out: dict[str, str] = {}
+    for m in manifests:
+        if not m.exists():
+            print(f"  ⚠ raw manifest 없음 → skip: {m}")
+            continue
+        with m.open() as f:
+            for r in csv.DictReader(f):
+                out[r["utt_id"]] = r["text"]
+    return out
+
+
+def _ingest_spoof(aug_manifest: Path, text_lookup: dict[str, str],
+                   already_used: set[str], rows: list[dict],
+                   spoof_set: set[str]) -> int:
+    """aug manifest 한 개 → rows에 append. utt_id 충돌(이미 spoof_set에 존재) 시 drop."""
+    if not aug_manifest.exists():
+        print(f"  ⚠ aug manifest 없음 → skip: {aug_manifest}")
+        return 0
+    n_added = n_drop = 0
+    with aug_manifest.open() as f:
+        for r in csv.DictReader(f):
+            spk = r["speaker"]
+            if spk not in SPOOF_SPLIT:
+                print(f"  ⚠ unknown speaker {spk} → skip")
+                continue
+            utt_id = r["utt_id"]
+            if utt_id in spoof_set:
+                # 같은 utt_id가 이미 다른 spoof source에 사용됨 → 드랍
+                n_drop += 1
+                continue
+            spoof_set.add(utt_id)
+            already_used.add(utt_id)
+            rows.append({
+                "utt_id": utt_id,
+                "speaker": spk,
+                "label": "spoof",
+                "source": _source_from_speaker(spk),
+                "text": text_lookup.get(utt_id, ""),
+                "wav_path": r["wav_path"],
+                "duration_sec": r["duration_sec"],
+                "split": SPOOF_SPLIT[spk],
+            })
+            n_added += 1
+    if n_drop:
+        print(f"  ⚠ {aug_manifest.name}: {n_drop}건 utt_id 중복 → drop")
+    return n_added
 
 
 def main() -> int:
@@ -58,27 +129,14 @@ def main() -> int:
                     "split": split,
                 })
 
-    # spoof — text 컬럼은 raw manifest에서 lookup
-    text_lookup = {
-        r["utt_id"]: r["text"]
-        for r in csv.DictReader(SPOOF_RAW_MANIFEST.open())
-    }
-    with SPOOF_AUG_MANIFEST.open() as f:
-        for r in csv.DictReader(f):
-            spk = r["speaker"]
-            if spk not in SPOOF_SPLIT:
-                print(f"  ⚠ unknown speaker {spk} → skip")
-                continue
-            rows.append({
-                "utt_id": r["utt_id"],
-                "speaker": spk,
-                "label": "spoof",
-                "source": "CLOVA",
-                "text": text_lookup.get(r["utt_id"], ""),
-                "wav_path": r["wav_path"],
-                "duration_sec": r["duration_sec"],
-                "split": SPOOF_SPLIT[spk],
-            })
+    # spoof — text lookup은 두 raw manifest 합집합
+    text_lookup = _load_text_lookup(CLOVA_RAW_MANIFEST, GOOGLE_RAW_MANIFEST)
+
+    spoof_utts: set[str] = set()
+    used_utts: set[str] = set()
+    n_clova = _ingest_spoof(CLOVA_AUG_MANIFEST, text_lookup, used_utts, rows, spoof_utts)
+    n_google = _ingest_spoof(GOOGLE_AUG_MANIFEST, text_lookup, used_utts, rows, spoof_utts)
+    print(f"spoof 적재: CLOVA {n_clova}, Google {n_google}")
 
     # 검증 — § 7.2 utt_id 누설
     by_label = {"real": set(), "spoof": set()}

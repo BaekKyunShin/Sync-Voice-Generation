@@ -1,4 +1,4 @@
-"""본 합성 5,064 wav에 v3 후처리 mix 적용 — 학습 데이터 완성.
+"""본 합성 wav에 v3 후처리 mix 적용 — 학습 데이터 완성.
 
 Mix 비율 (사용자 결정):
   - light    70% — 조용한 실내 톤 (SNR 25~35dB, wet 0.03~0.08)
@@ -11,19 +11,28 @@ RawBoost 4 카테고리 (linear conv EQ, soft clipping, impulsive, real MUSAN no
 mp3/μ-law codec + smooth volume walk이 발화 단위 random 적용.
 
 실행:
+    # CLOVA (기본값)
     python scripts/apply_augment_full_mix.py
 
+    # Google
+    python scripts/apply_augment_full_mix.py \\
+        --input metadata/splits/synth_full_google_manifest.csv \\
+        --out-dir data_kspon/synth_full_google_aug \\
+        --out-manifest metadata/splits/synth_full_google_aug_manifest.csv \\
+        --seed 43
+
 전제:
-    metadata/splits/synth_full_manifest.csv 존재
+    --input manifest 존재
     assets/rir/ (16개 합성 IR)
     assets/musan/musan/noise/ (930개 real noise)
 
 출력:
-    data_kspon/synth_full_aug/<speaker>/<utt_id>.wav (16kHz, 1 강도)
-    metadata/splits/synth_full_aug_manifest.csv
+    --out-dir/<speaker>/<utt_id>.wav (16kHz, 1 강도)
+    --out-manifest CSV
 """
 from __future__ import annotations
 
+import argparse
 import csv
 import shutil
 import sys
@@ -41,13 +50,13 @@ from lib.augment_ops import (  # noqa: E402
     prepend_breath_natural,
 )
 
-INPUT_MANIFEST = Path("metadata/splits/synth_full_manifest.csv")
+DEFAULT_INPUT = Path("metadata/splits/synth_full_manifest.csv")
+DEFAULT_OUT_DIR = Path("data_kspon/synth_full_aug")
+DEFAULT_OUT_MANIFEST = Path("metadata/splits/synth_full_aug_manifest.csv")
 RIR_DIR = Path("assets/rir")
 MUSAN_NOISE_DIR = Path("assets/musan/musan/noise")
-OUT_DIR = Path("data_kspon/synth_full_aug")
-OUT_MANIFEST = Path("metadata/splits/synth_full_aug_manifest.csv")
 SR = 16000
-SEED = 42
+DEFAULT_SEED = 42
 
 MIX_WEIGHTS = [("light", 0.70), ("medium", 0.25), ("original", 0.05)]
 BREATH_APPLY_PROB = 0.75
@@ -67,14 +76,26 @@ def sample_strength(rng: np.random.Generator) -> str:
 
 
 def main() -> None:
-    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--input", type=Path, default=DEFAULT_INPUT)
+    ap.add_argument("--out-dir", type=Path, default=DEFAULT_OUT_DIR)
+    ap.add_argument("--out-manifest", type=Path, default=DEFAULT_OUT_MANIFEST)
+    ap.add_argument("--seed", type=int, default=DEFAULT_SEED)
+    args = ap.parse_args()
+
+    print(f"input:        {args.input}")
+    print(f"out-dir:      {args.out_dir}")
+    print(f"out-manifest: {args.out_manifest}")
+    print(f"seed:         {args.seed}")
+
+    args.out_dir.mkdir(parents=True, exist_ok=True)
     rir_pool = load_rir_pool(RIR_DIR, sr=SR)
     real_noise = load_real_noise_pool(MUSAN_NOISE_DIR, sr=SR, max_files=30)
     print(f"RIR {len(rir_pool)}, real noise {len(real_noise)}")
 
-    rng = np.random.default_rng(SEED)
+    rng = np.random.default_rng(args.seed)
 
-    with INPUT_MANIFEST.open() as f:
+    with args.input.open() as f:
         rows_in = list(csv.DictReader(f))
     print(f"입력 wav: {len(rows_in)}")
 
@@ -85,7 +106,7 @@ def main() -> None:
         spk = row["speaker"]
         utt_id = row["utt_id"]
         wav_in = Path(row["wav_path"])
-        spk_dir = OUT_DIR / spk
+        spk_dir = args.out_dir / spk
         spk_dir.mkdir(parents=True, exist_ok=True)
         wav_out = spk_dir / f"{utt_id}.wav"
 
@@ -122,20 +143,20 @@ def main() -> None:
                 f"{by_strength['light']}/{by_strength['medium']}/{by_strength['original']}"
             )
 
-    OUT_MANIFEST.parent.mkdir(parents=True, exist_ok=True)
-    with OUT_MANIFEST.open("w", newline="") as f:
+    args.out_manifest.parent.mkdir(parents=True, exist_ok=True)
+    with args.out_manifest.open("w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=OUT_FIELDS)
         w.writeheader()
         w.writerows(rows_out)
 
     total = len(rows_out)
-    print(f"\n=== 완료 ===")
+    print("\n=== 완료 ===")
     for name, _ in MIX_WEIGHTS:
         n = by_strength[name]
         print(f"  {name:9s}: {n:5d} ({n/total*100:.1f}%)")
     total_dur = sum(r["duration_sec"] for r in rows_out)
     print(f"  총 분량: {total_dur/3600:.2f}h")
-    print(f"manifest: {OUT_MANIFEST}")
+    print(f"manifest: {args.out_manifest}")
 
 
 if __name__ == "__main__":
