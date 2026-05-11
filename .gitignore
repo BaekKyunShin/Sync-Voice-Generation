@@ -6,6 +6,8 @@
 *.pem
 *credential*
 *secret*
+*-key.json
+assets/*.json
 
 # ── 큰 데이터·라이선스 보호 ──────────────────
 # KsponSpeech 음성/텍스트는 학내 연구용. 외부 공개 금지.
